@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 # Tokenni xavfsiz tarzda server muhitidan olamiz
-TOKEN = os.getenv("8492254585:AAGfMZIjeq38B90rOukgwZha8618pXAob9I")
+TOKEN = os.getenv("BOT_TOKEN")
 
 class EmojiBotStates(StatesGroup):
   waiting_for_font = State()
