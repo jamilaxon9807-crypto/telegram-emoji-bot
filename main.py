@@ -11,7 +11,6 @@ BOT_USERNAME = bot.get_me().username
 
 user_states = {}
 
-# Shrift faylidan qaysi harf va belgilar borligini aniqlash funksiyasi
 def get_supported_chars(font_path):
     try:
         ttf = TTFont(font_path)
@@ -20,8 +19,6 @@ def get_supported_chars(font_path):
             for char_code in table.cmap.keys():
                 chars.add(chr(char_code))
         
-        # Telegram bitta stiker to'plamiga 200 tagacha sig'diradi.
-        # Biz eng kerakli harf, son va belgilarni ajratib olamiz.
         allowed_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&?"
         supported = [c for c in allowed_chars if c in chars]
         return supported if supported else list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -85,19 +82,17 @@ def handle_color(message):
     chat_id = message.chat.id
     color = message.text.strip()
     user_states[chat_id]['color'] = color
-    
     font_path = user_states[chat_id]['font']
 
-    bot.reply_to(message, f"🎨 Rang ({color}) qabul qilindi!\n\nShrift ichidagi barcha mavjud belgilarni qidiryapman va to'plam yaratyapman (bu 1-2 daqiqa oladi)...")
+    # Jarayon haqida xabar qoldiramiz va uni o'zgartirib boramiz
+    status_msg = bot.reply_to(message, f"🎨 Rang ({color}) qabul qilindi!\n\n⏳ Shrift ichidagi barcha harf va belgilarni qidirib, Telegram'ga sekin-asta yuklayapman...\nIltimos, bu jarayon 1-2 daqiqa oladi, kutib turing!")
 
     pack_name = f"custom_emojis_{chat_id}_{int(time.time())}_by_{BOT_USERNAME}"
     pack_title = "J&M Custom Emojis"
     
-    # Shrift ichidagi mavjud harflarni o'qib olish
     characters = get_supported_chars(font_path)
 
     try:
-        # Aniq 100x100 ga moslashtirish uchun shrift o'lchami ~70
         font = ImageFont.truetype(font_path, 70)
     except:
         bot.send_message(chat_id, "❌ Shriftni o'qishda xatolik yuz berdi.")
@@ -108,11 +103,9 @@ def handle_color(message):
 
     for char in characters:
         try:
-            # Qat'iy 100x100 shaffof fon
             img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
             draw = ImageDraw.Draw(img)
 
-            # Harfni aniq markazga joylash
             bbox = draw.textbbox((0, 0), char, font=font)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
@@ -121,18 +114,14 @@ def handle_color(message):
 
             draw.text((x, y), char, font=font, fill=color)
 
-            # WEBP formatida saqlash (Telegram aynan shuni talab qiladi)
             output_path = f"{chat_id}_temp.webp"
             img.save(output_path, "WEBP")
-
-            # Harfga mos standart emoji biriktirish (masalan, A harfiga ✨)
             emoji_icon = ["✨"]
 
             with open(output_path, 'rb') as f:
                 input_sticker = telebot.types.InputSticker(f, emoji_icon)
                 
                 if first_sticker:
-                    # Birinchi fayl orqali to'plamni yaratish
                     bot.create_new_sticker_set(
                         user_id=message.from_user.id,
                         name=pack_name,
@@ -142,25 +131,31 @@ def handle_color(message):
                         sticker_type="custom_emoji"
                     )
                     first_sticker = False
+                    time.sleep(2)  # To'plam Telegram bazasida ochilishini kutish uchun muhim pauza
                 else:
-                    # Qolgan fayllarni shu to'plam ustiga qo'shib borish
                     bot.add_sticker_to_set(
                         user_id=message.from_user.id,
                         name=pack_name,
                         sticker=input_sticker
                     )
+                    time.sleep(0.5)  # Har bir harfdan keyin Telegram bloklamasligi uchun xavfsiz pauza
 
             os.remove(output_path)
             success_count += 1
-            time.sleep(0.1) # Telegramni qotirib qo'ymaslik uchun kichik pauza
+            
+            # Har 15 ta harfdan keyin xabarni yangilab turamiz
+            if success_count % 15 == 0:
+                bot.edit_message_text(f"⏳ Jarayon ketyapti... Hozirgacha {success_count} ta belgi yuklandi.", chat_id, status_msg.message_id)
+
         except Exception as e:
+            print(f"Xato yuz berdi: {e}")
             continue
 
     if success_count > 0:
         pack_url = f"https://t.me/addstickers/{pack_name}"
-        bot.send_message(chat_id, f"🎉 Ajoyib! {success_count} ta belgidan iborat 100x100 o'lchamdagi emoji to'plami tayyor.\n\nQuyidagi ssilkaga bosib, qo'shib oling:\n{pack_url}")
+        bot.edit_message_text(f"🎉 Ajoyib! {success_count} ta belgidan iborat 100x100 o'lchamdagi to'liq emoji to'plami tayyor.\n\nQuyidagi ssilkaga bosib, qo'shib oling:\n{pack_url}", chat_id, status_msg.message_id)
     else:
-        bot.send_message(chat_id, "❌ Xatolik: Emojilarni yaratib bo'lmadi. Shriftda muammo bo'lishi mumkin.")
+        bot.edit_message_text("❌ Xatolik: Emojilarni yaratib bo'lmadi.", chat_id, status_msg.message_id)
 
     user_states.pop(chat_id, None)
 
