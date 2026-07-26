@@ -73,7 +73,7 @@ def handle_font(message):
             new_file.write(downloaded_file)
 
         user_states[chat_id]['font'] = font_path
-        bot.send_message(chat_id, "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli HEX rang kodini yuboring (masalan: #FF0000 yoki #0000FF).")
+        bot.send_message(chat_id, "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli HEX rang kodini yuboring (masalan: #FF0000).")
     except Exception as e:
         bot.reply_to(message, "❌ Shriftni yuklab bo'lmadi. Boshqa fayl sinab ko'ring.")
 
@@ -84,8 +84,7 @@ def handle_color(message):
     user_states[chat_id]['color'] = color
     font_path = user_states[chat_id]['font']
 
-    # Dastlabki qiziqarli xabar
-    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⏳ Tayyorgarlik boshlandi...\n▒▒▒▒▒▒▒▒▒▒ 0%", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n🚀 Tezkor rejimda tayyorlanmoqda...\n▒▒▒▒▒▒▒▒▒▒ 0%", parse_mode="Markdown")
 
     pack_name = f"custom_emojis_{chat_id}_{int(time.time())}_by_{BOT_USERNAME}"
     pack_title = "J&M Custom Emojis"
@@ -132,33 +131,34 @@ def handle_color(message):
                         sticker_type="custom_emoji"
                     )
                     first_sticker = False
-                    time.sleep(2)
+                    time.sleep(1) # Boshlanishida ozgina kutish shart
                 else:
                     bot.add_sticker_to_set(
                         user_id=message.from_user.id,
                         name=pack_name,
                         sticker=input_sticker
                     )
-                    time.sleep(0.4)
+                    time.sleep(0.08) # 0.4 soniyadan 0.08 soniyaga tushirildi (5 barobar tez!)
 
             os.remove(output_path)
             success_count += 1
             
-            # Har bir harf o'tganda foiz va progress-borni yangilab boramiz
-            percent = int((success_count / total_chars) * 100)
-            filled_blocks = int(percent / 10)
-            empty_blocks = 10 - filled_blocks
-            bar = "█" * filled_blocks + "▒" * empty_blocks
-            
-            bot.edit_message_text(
-                f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
-                f"⚡ Emojilar tayyorlanmoqda...\n"
-                f"[{bar}] {percent}%\n"
-                f"📥 Yuklandi: {success_count}/{total_chars} ta belgi",
-                chat_id, 
-                status_msg.message_id,
-                parse_mode="Markdown"
-            )
+            # Har 20 taroqdan keyin progress-borni yangilaymiz (ekran miltillamasligi uchun)
+            if success_count % 5 == 0 or success_count == total_chars:
+                percent = int((success_count / total_chars) * 100)
+                filled_blocks = int(percent / 10)
+                empty_blocks = 10 - filled_blocks
+                bar = "█" * filled_blocks + "▒" * empty_blocks
+                
+                bot.edit_message_text(
+                    f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
+                    f"🚀 Tezkor rejimda tayyorlanmoqda...\n"
+                    f"[{bar}] {percent}%\n"
+                    f"📥 Yuklandi: {success_count}/{total_chars} ta belgi",
+                    chat_id, 
+                    status_msg.message_id,
+                    parse_mode="Markdown"
+                )
 
         except Exception as e:
             continue
@@ -167,8 +167,8 @@ def handle_color(message):
         pack_url = f"https://t.me/addstickers/{pack_name}"
         bot.edit_message_text(
             f"🎉 **Tabriklaymiz!**\n\n"
-            f"✨ {success_count} ta belgidan iborat 100x100 o'lchamdagi maxsus emoji to'plami tayyor!\n\n"
-            f"👉 Quyidagi ssilkaga bosib to'plamni qo'shib oling:\n{pack_url}",
+            f"✨ {success_count} ta belgidan iborat 100x100 o'lchamdagi to'plam juda tez fursatda tayyorlandi!\n\n"
+            f"👉 Quyidagi ssilkaga bosib qo'shib oling:\n{pack_url}",
             chat_id, 
             status_msg.message_id,
             parse_mode="Markdown"
@@ -179,4 +179,3 @@ def handle_color(message):
     user_states.pop(chat_id, None)
 
 bot.polling(none_stop=True)
-                        
