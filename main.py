@@ -7,7 +7,6 @@ from PIL import Image, ImageDraw, ImageFont
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# Bot username'ini olish
 try:
     BOT_USERNAME = bot.get_me().username
 except Exception:
@@ -15,7 +14,7 @@ except Exception:
 
 user_states = {}
 
-# Qat'iy belgilangan 62 ta harf va sonlar (boshqa hech qanday belgi aralashmaydi)
+# Barcha kerakli 62 ta belgi (Katta harflar, Kichik harflar va Raqamlar)
 TARGET_CHARS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890")
 
 @bot.message_handler(commands=['start'])
@@ -27,9 +26,9 @@ def send_welcome(message):
     
     bot.send_message(
         message.chat.id, 
-        "👋 **J&M Custom Emoji Botiga xush kelibsiz!**\n\nQuyidagi menyudan kerakli bo'limni tanlang:", 
+        "👋 <b>J&M Custom Emoji Botiga xush kelibsiz!</b>\n\nQuyidagi menyudan kerakli bo'limni tanlang:", 
         reply_markup=markup,
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("mode_"))
@@ -46,8 +45,8 @@ def handle_mode(call):
     bot.edit_message_text(
         chat_id=chat_id,
         message_id=call.message.message_id,
-        text="🔤 **Emoji harflar (100x100) yaratish bo'limi**\n\nIltimos, `.ttf` yoki `.otf` formatidagi shrift (font) faylini yuboring.",
-        parse_mode="Markdown"
+        text="🔤 <b>Emoji harflar (100x100) yaratish bo'limi</b>\n\nIltimos, <code>.ttf</code> yoki <code>.otf</code> formatidagi shrift (font) faylini yuboring.",
+        parse_mode="HTML"
     )
 
 @bot.message_handler(content_types=['document'])
@@ -68,10 +67,10 @@ def handle_font(message):
 
         user_states[chat_id]['font'] = font_path
         bot.edit_message_text(
-            "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli HEX rang kodini yuboring (masalan: `#FF0000` yoki `#000000`).",
+            "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli HEX rang kodini yuboring (masalan: <code>#FF0000</code> yoki <code>#000000</code>).",
             chat_id,
             status_reply.message_id,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     except Exception as e:
         bot.edit_message_text(f"❌ Shriftni yuklab bo'lmadi: {e}", chat_id, status_reply.message_id)
@@ -83,7 +82,7 @@ def handle_color(message):
     user_states[chat_id]['color'] = color
     font_path = user_states[chat_id]['font']
 
-    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⚙️ Faqat A-Z, a-z va 0-9 belgilaridan iborat 62 ta emoji tayyorlanmoqda...", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, f"🎨 Rang (<code>{color}</code>) qabul qilindi!\n\n⚙️ Barcha harflar va sonlar (62 ta emoji) tayyorlanmoqda...", parse_mode="HTML")
 
     ts = int(time.time())
     pack_name = f"e_{chat_id}_{ts}_by_{BOT_USERNAME}".lower()
@@ -95,7 +94,7 @@ def handle_color(message):
         bot.edit_message_text(f"❌ Shrift faylida xatolik: {e}", chat_id, status_msg.message_id)
         return
 
-    # 1. 62 ta rasmni kompyuter xotirasida (100x100) tayyorlash
+    # 1. Barcha 62 ta emojini tayyorlash
     temp_files = []
     for i, char in enumerate(TARGET_CHARS):
         img_path = f"temp_{chat_id}_{i}.webp"
@@ -111,32 +110,32 @@ def handle_color(message):
 
             draw.text((x, y), char, font=font, fill=color)
             img.save(img_path, "WEBP")
-            temp_files.append(img_path)
+            temp_files.append((img_path, char))
         except Exception:
             continue
 
-    if len(temp_files) == 0:
+    if not temp_files:
         bot.edit_message_text("❌ Rasmlarni tayyorlashda xatolik yuz berdi.", chat_id, status_msg.message_id)
         if os.path.exists(font_path):
             os.remove(font_path)
         return
 
-    # Telegram limitiga ko'ra emojilarni 2 ga bo'lamiz: 50 ta va 12 ta
-    batch1_paths = temp_files[:50]
-    batch2_paths = temp_files[50:]
+    # Telegram limitiga ko'ra emojilarni 50 ta va qolganlariga bo'lamiz
+    batch1 = temp_files[:50]
+    batch2 = temp_files[50:]
 
     opened_files_1 = []
     stickers_batch1 = []
     
-    for p in batch1_paths:
-        f = open(p, 'rb')
+    for path, char in batch1:
+        f = open(path, 'rb')
         opened_files_1.append(f)
         stickers_batch1.append(InputSticker(f, ["✨"]))
 
     success_count = 0
 
     try:
-        # Birinchi 50 tasini bitta urinishda yuklaymiz
+        # Dastlabki 50 tasini bitta so'rovda yaratish
         bot.create_new_sticker_set(
             user_id=message.from_user.id,
             name=pack_name,
@@ -145,32 +144,37 @@ def handle_color(message):
             sticker_format="static",
             sticker_type="custom_emoji"
         )
-        success_count += len(batch1_paths)
+        success_count += len(batch1)
         
         for f in opened_files_1:
             f.close()
             
-        # Qolgan 12 tasini (sonlar va oxirgi harflarni) tezkor qo'shamiz
-        if batch2_paths:
-            for p in batch2_paths:
-                try:
-                    with open(p, 'rb') as f:
-                        st = InputSticker(f, ["✨"])
-                        bot.add_sticker_to_set(
-                            user_id=message.from_user.id,
-                            name=pack_name,
-                            sticker=st
-                        )
-                    success_count += 1
-                    time.sleep(0.3)
-                except Exception:
-                    pass
+        # Telegram serverida to'plam to'liq ro'yxatdan o'tishi uchun 2.5 soniya kutiladi
+        time.sleep(2.5)
+
+        # Qolgan barcha emojilarni (51-dan boshlab) ketma-ket birma-bir qo'shib chiqamiz
+        if batch2:
+            for path, char in batch2:
+                for attempt in range(3):
+                    try:
+                        with open(path, 'rb') as f:
+                            st = InputSticker(f, ["✨"])
+                            bot.add_sticker_to_set(
+                                user_id=message.from_user.id,
+                                name=pack_name,
+                                sticker=st
+                            )
+                        success_count += 1
+                        time.sleep(0.4)
+                        break
+                    except Exception:
+                        time.sleep(1.5)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ Telegram to'plam yaratishda xatolik berdi:\n`{e}`", chat_id, status_msg.message_id, parse_mode="Markdown")
+        bot.edit_message_text(f"❌ Telegram to'plam yaratishda xatolik berdi:\n<code>{e}</code>", chat_id, status_msg.message_id, parse_mode="HTML")
         for f in opened_files_1:
             f.close()
-        for path in temp_files:
+        for path, _ in temp_files:
             if os.path.exists(path):
                 os.remove(path)
         if os.path.exists(font_path):
@@ -178,29 +182,29 @@ def handle_color(message):
         user_states.pop(chat_id, None)
         return
 
-    # Vaqtinchalik barcha fayllarni kompyuter xotirasidan o'chirish
-    for path in temp_files:
+    # Fayllarni tozalash
+    for path, _ in temp_files:
         if os.path.exists(path):
             os.remove(path)
     if os.path.exists(font_path):
         os.remove(font_path)
 
-    # Yakuniy havolani foydalanuvchiga taqdim etish
+    # HTML formatida xatosiz havola va tugma
     if success_count > 0:
         pack_url = f"https://t.me/addemoji/{pack_name}"
         
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton(f"✨ {success_count} ta emojini qo'shib olish", url=pack_url))
+        markup.add(InlineKeyboardButton(f"✨ {success_count} ta emojini qo'shish", url=pack_url))
 
         bot.edit_message_text(
-            f"🎉 **Tabriklaymiz! Emoji to'plami tayyor!**\n\n"
-            f"✅ Faqat kerakli harflar va sonlar (Katta harflar, Kichik harflar va Raqamlar) yig'ilib, jami **{success_count}** ta toza emoji yaratildi!\n\n"
-            f"🔗 **To'plam havolasi:**\n{pack_url}\n\n"
-            f"👇 *Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:*",
+            f"🎉 <b>Tabriklaymiz! Emoji to'plami tayyor!</b>\n\n"
+            f"✅ Barcha harflar va sonlar (Katta harflar, Kichik harflar va Raqamlar) yig'ilib, jami <b>{success_count}</b> ta emoji to'liq yaratildi!\n\n"
+            f"🔗 <b>To'plam havolasi:</b>\n{pack_url}\n\n"
+            f"👇 <i>Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:</i>",
             chat_id, 
             status_msg.message_id,
             reply_markup=markup,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         bot.edit_message_text("❌ Xatolik yuz berdi, emojilarni saqlab bo'lmadi.", chat_id, status_msg.message_id)
