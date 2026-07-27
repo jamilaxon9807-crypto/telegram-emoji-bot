@@ -7,7 +7,7 @@ from fontTools.ttLib import TTFont
 
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
-BOT_USERNAME = bot.get_me().username
+BOT_USERNAME = "JM_CreatorStudio_bot"  # Siz ko'rsatgan bot nomi
 
 user_states = {}
 
@@ -63,7 +63,7 @@ def handle_font(message):
         bot.reply_to(message, "Iltimos, /start buyrug'ini bosing va menyudan tanlang.")
         return
 
-    bot.reply_to(message, "Shrift qabul qilinmoqda...")
+    bot.reply_to(message, "📁 Shrift qabul qilinmoqda...")
     try:
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
@@ -73,7 +73,7 @@ def handle_font(message):
             new_file.write(downloaded_file)
 
         user_states[chat_id]['font'] = font_path
-        bot.send_message(chat_id, "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli HEX rang kodini yuboring (masalan: #FF0000).")
+        bot.send_message(chat_id, "✅ Shrift muvaffaqiyatli saqlandi!\n\nEndi emojilar uchun kerakli rang kodini yuboring (masalan: `#FF0000` yoki `#000000`).")
     except Exception as e:
         bot.reply_to(message, "❌ Shriftni yuklab bo'lmadi. Boshqa fayl sinab ko'ring.")
 
@@ -84,10 +84,10 @@ def handle_color(message):
     user_states[chat_id]['color'] = color
     font_path = user_states[chat_id]['font']
 
-    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n🚀 Tezkor rejimda tayyorlanmoqda...\n▒▒▒▒▒▒▒▒▒▒ 0%", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⏳ Emojilar tayyorlanmoqda, iltimos kuting...", parse_mode="Markdown")
 
-    pack_name = f"custom_emojis_{chat_id}_{int(time.time())}_by_{BOT_USERNAME}"
-    pack_title = "J&M Custom Emojis"
+    pack_name = f"emojis_{chat_id}_{int(time.time())}_by_jm"
+    pack_title = f"Custom Emojis by @{BOT_USERNAME}"
     
     characters = get_supported_chars(font_path)
     total_chars = len(characters)
@@ -103,6 +103,17 @@ def handle_color(message):
 
     for i, char in enumerate(characters):
         try:
+            # Har 5 ta belgida holatni qiziqarli qilib yangilab turamiz
+            if i % 5 == 0:
+                bot.edit_message_text(
+                    f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
+                    f"⚡ Ishlov berilmoqda: **{i}/{total_chars}** ta belgi tayyorlandi...\n"
+                    f"<i>Bot: @{BOT_USERNAME}</i>",
+                    chat_id, 
+                    status_msg.message_id,
+                    parse_mode="HTML"
+                )
+
             img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
             draw = ImageDraw.Draw(img)
 
@@ -131,50 +142,38 @@ def handle_color(message):
                         sticker_type="custom_emoji"
                     )
                     first_sticker = False
-                    time.sleep(1) # Boshlanishida ozgina kutish shart
+                    time.sleep(1.5)
                 else:
                     bot.add_sticker_to_set(
                         user_id=message.from_user.id,
                         name=pack_name,
                         sticker=input_sticker
                     )
-                    time.sleep(0.08) # 0.4 soniyadan 0.08 soniyaga tushirildi (5 barobar tez!)
+                    time.sleep(0.3) # Telegram anti-spam bloki chiqmasligi uchun xavfsiz pauza
 
             os.remove(output_path)
             success_count += 1
-            
-            # Har 20 taroqdan keyin progress-borni yangilaymiz (ekran miltillamasligi uchun)
-            if success_count % 5 == 0 or success_count == total_chars:
-                percent = int((success_count / total_chars) * 100)
-                filled_blocks = int(percent / 10)
-                empty_blocks = 10 - filled_blocks
-                bar = "█" * filled_blocks + "▒" * empty_blocks
-                
-                bot.edit_message_text(
-                    f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
-                    f"🚀 Tezkor rejimda tayyorlanmoqda...\n"
-                    f"[{bar}] {percent}%\n"
-                    f"📥 Yuklandi: {success_count}/{total_chars} ta belgi",
-                    chat_id, 
-                    status_msg.message_id,
-                    parse_mode="Markdown"
-                )
 
         except Exception as e:
+            print(f"Xatolik: {e}")
             continue
 
     if success_count > 0:
         pack_url = f"https://t.me/addstickers/{pack_name}"
         bot.edit_message_text(
-            f"🎉 **Tabriklaymiz!**\n\n"
-            f"✨ {success_count} ta belgidan iborat 100x100 o'lchamdagi to'plam juda tez fursatda tayyorlandi!\n\n"
-            f"👉 Quyidagi ssilkaga bosib qo'shib oling:\n{pack_url}",
+            f"🎉 <b>Tabriklaymiz!</b>\n\n"
+            f"✨ <b>{success_count}</b> ta belgidan iborat 100x100 o'lchamdagi emoji to'plami tayyor!\n\n"
+            f"👉 To'plamni qo'shib olish uchun quyidagi ssilkaga bosing:\n{pack_url}\n\n"
+            f"<i>Yaratuvchi: @{BOT_USERNAME}</i>",
             chat_id, 
             status_msg.message_id,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     else:
         bot.edit_message_text("❌ Xatolik: Emojilarni yaratib bo'lmadi.", chat_id, status_msg.message_id)
+
+    if os.path.exists(font_path):
+        os.remove(font_path)
 
     user_states.pop(chat_id, None)
 
