@@ -8,7 +8,6 @@ from fontTools.ttLib import TTFont
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# Bot username'ini olish
 try:
     BOT_USERNAME = bot.get_me().username
 except Exception:
@@ -26,16 +25,13 @@ def get_supported_chars(font_path):
                 if char.isprintable() and not char.isspace():
                     chars.add(char)
         
-        # Siz talab qilgan aniq tartibdagi guruhlar:
-        uppercase = sorted([c for c in chars if c.isupper()])     # 1. Katta harflar (A-Z va h.k.)
-        lowercase = sorted([c for c in chars if c.islower()])     # 2. Kichik harflar (a-z va h.k.)
-        digits = sorted([c for c in chars if c.isdigit()])        # 3. Sonlar (0-9)
-        others = sorted([c for c in chars if not c.isupper() and not c.islower() and not c.isdigit()]) # 4. Boshqa elementlar
+        uppercase = sorted([c for c in chars if c.isupper()])     
+        lowercase = sorted([c for c in chars if c.islower()])     
+        digits = sorted([c for c in chars if c.isdigit()])        
+        others = sorted([c for c in chars if not c.isupper() and not c.islower() and not c.isdigit()]) 
         
-        # Tartib bo'yicha birlashtiramiz
         ordered_chars = uppercase + lowercase + digits + others
         
-        # Kamida 150+ ta, ko'pi bilan 200 ta belgi olamiz (Telegram limitiga moslab)
         return ordered_chars[:200] if ordered_chars else list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
     except Exception:
         return list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
@@ -119,7 +115,7 @@ def handle_color(message):
         bot.edit_message_text(f"❌ Shrift faylida xatolik: {e}", chat_id, status_msg.message_id)
         return
 
-    # 1-BOSQICH: Barcha belgilarni 100x100 WEBP formatida yaratish
+    # 1. Rasm fayllarini tayyorlash
     temp_files = []
     for i, char in enumerate(characters):
         img_path = f"temp_{chat_id}_{i}.webp"
@@ -145,28 +141,27 @@ def handle_color(message):
             os.remove(font_path)
         return
 
-    # 2-BOSQICH: Telegramga yuklash (Birinchi 50 tasi birvarakayiga, qolganlari tartib bilan)
-    batch1 = temp_files[:50]
-    remaining_batch = temp_files[50:]
-
-    opened_files = []
-    stickers_batch1 = []
-
-    for path, char in batch1:
-        f = open(path, 'rb')
-        opened_files.append(f)
-        stickers_batch1.append(InputSticker(f, ["✨"]))
-
+    # Telegram limitiga ko'ra emojilarni 50 tadan "paket"larga (batch) bo'lamiz
+    batches = [temp_files[i:i + 50] for i in range(0, len(temp_files), 50)]
     success_count = 0
 
     try:
         bot.edit_message_text(
-            f"⚡ Jami **{len(temp_files)}** ta belgi (Katta harflar -> Kichik harflar -> Sonlar -> Boshqa elementlar) tartibida yuklanmoqda...",
+            f"⚡ Jami **{len(temp_files)}** ta belgi topildi. Yuklanmoqda...",
             chat_id,
             status_msg.message_id,
             parse_mode="Markdown"
         )
         
+        # Birinchi paket bilan to'plamni (pack) yaratamiz
+        first_batch = batches[0]
+        opened_files = []
+        stickers_batch1 = []
+        for path, char in first_batch:
+            f = open(path, 'rb')
+            opened_files.append(f)
+            stickers_batch1.append(InputSticker(f, ["✨"]))
+            
         bot.create_new_sticker_set(
             user_id=message.from_user.id,
             name=pack_name,
@@ -175,11 +170,48 @@ def handle_color(message):
             sticker_format="static",
             sticker_type="custom_emoji"
         )
-        success_count += len(batch1)
-    except Exception as e:
-        bot.edit_message_text(f"❌ Telegram to'plam yaratishda xatolik berdi:\n`{e}`", chat_id, status_msg.message_id, parse_mode="Markdown")
+        success_count += len(first_batch)
+        
         for f in opened_files:
             f.close()
+            
+        # Qolgan paketlarni qo'shamiz (add_sticker_to_set bilan)
+        # Bitta-bitta so'rov tashlash Telegramni limitiga tiqmasligi uchun biroz pauza qilamiz
+        for batch_index, batch in enumerate(batches[1:], start=2):
+            for path, char in batch:
+                attempts = 0
+                while attempts < 3:
+                    try:
+                        with open(path, 'rb') as f:
+                            st = InputSticker(f, ["✨"])
+                            bot.add_sticker_to_set(
+                                user_id=message.from_user.id,
+                                name=pack_name,
+                                sticker=st
+                            )
+                        success_count += 1
+                        time.sleep(0.4) # Limitga tushmaslik uchun
+                        break 
+                    except Exception as api_err:
+                        err_str = str(api_err).lower()
+                        if "too many requests" in err_str or "429" in err_str:
+                            time.sleep(3)
+                        attempts += 1
+                        
+            # Xabarni yangilab turamiz
+            try:
+                bot.edit_message_text(
+                    f"⚡ Kiritilmoqda... **{success_count}/{len(temp_files)}** ta belgi yuklandi.",
+                    chat_id,
+                    status_msg.message_id,
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+
+    except Exception as e:
+        bot.edit_message_text(f"❌ Telegram to'plam yaratishda xatolik berdi:\n`{e}`", chat_id, status_msg.message_id, parse_mode="Markdown")
+        # Xatolikda tozalash
         for path, _ in temp_files:
             if os.path.exists(path):
                 os.remove(path)
@@ -188,45 +220,13 @@ def handle_color(message):
         user_states.pop(chat_id, None)
         return
 
-    for f in opened_files:
-        f.close()
-
-    # Qolgan belgilarni qo'shish
-    if remaining_batch:
-        time.sleep(1)
-        for idx, (path, char) in enumerate(remaining_batch, start=51):
-            try:
-                with open(path, 'rb') as f:
-                    st = InputSticker(f, ["✨"])
-                    bot.add_sticker_to_set(
-                        user_id=message.from_user.id,
-                        name=pack_name,
-                        sticker=st
-                    )
-                success_count += 1
-                
-                if idx % 15 == 0:
-                    try:
-                        bot.edit_message_text(
-                            f"⚡ Qo'shilmoqda: **{success_count}/{len(temp_files)}** ta tayyor...",
-                            chat_id,
-                            status_msg.message_id,
-                            parse_mode="Markdown"
-                        )
-                    except:
-                        pass
-                time.sleep(0.3)
-            except Exception:
-                pass
-
-    # Fayllarni tozalash
+    # Barcha ishlari tugagach, tozalash
     for path, _ in temp_files:
         if os.path.exists(path):
             os.remove(path)
     if os.path.exists(font_path):
         os.remove(font_path)
 
-    # 3-BOSQICH: addemoji havolasini yuborish
     if success_count > 0:
         pack_url = f"https://t.me/addemoji/{pack_name}"
         
@@ -235,7 +235,7 @@ def handle_color(message):
 
         bot.edit_message_text(
             f"🎉 **Tabriklaymiz! Emoji to'plami tayyor!**\n\n"
-            f"✅ Barcha harflar va sonlar aniq tartibda (**Katta harflar -> Kichik harflar -> Sonlar -> Boshqa elementlar**) yig'ilib, jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
+            f"✅ Barcha harflar va sonlar aniq tartibda (Katta harflar -> Kichik harflar -> Sonlar -> Boshqa elementlar) yig'ilib, jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
             f"🔗 **To'plam havolasi:**\n{pack_url}\n\n"
             f"👇 *Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:*",
             chat_id, 
