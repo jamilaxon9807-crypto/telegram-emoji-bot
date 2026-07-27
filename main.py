@@ -1,8 +1,11 @@
 import os
 import time
+import math
+import numpy as np
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputSticker
 from PIL import Image, ImageDraw, ImageFont
+import imageio
 
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
@@ -14,7 +17,6 @@ except Exception:
 
 user_states = {}
 
-# Belgilar to'plami
 ENG_UPPER = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 ENG_LOWER = list("abcdefghijklmnopqrstuvwxyz")
 RU_UPPER = list("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ")
@@ -25,12 +27,12 @@ DIGITS = list("1234567890")
 def send_welcome(message):
     user_states[message.chat.id] = {} 
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("1. Emoji harflar yaratish", callback_data="mode_static"))
-    markup.add(InlineKeyboardButton("2. Animatsiyali harflar yaratish", callback_data="mode_animated"))
+    markup.add(InlineKeyboardButton("1. Statik emoji harflar", callback_data="mode_static"))
+    markup.add(InlineKeyboardButton("2. 🎬 Animatsiyali emoji harflar", callback_data="mode_animated"))
     
     bot.send_message(
         message.chat.id, 
-        "👋 <b>J&M Custom Emoji Botiga xush kelibsiz!</b>\n\nQuyidagi menyudan kerakli bo'limni tanlang:", 
+        "👋 <b>J&M Custom Emoji Botiga xush kelibsiz!</b>\n\nQuyidagi menyudan kerakli rejimni tanlang:", 
         reply_markup=markup,
         parse_mode="HTML"
     )
@@ -40,16 +42,14 @@ def handle_mode(call):
     chat_id = call.message.chat.id
     mode = call.data.split("_")[1]
     
-    if mode == "animated":
-        bot.answer_callback_query(call.id, "Animatsiyali emojilar tez kunda qo'shiladi!", show_alert=True)
-        return
-        
-    user_states[chat_id] = {'step': 'await_font'}
+    user_states[chat_id] = {'mode': mode, 'step': 'await_font'}
     bot.answer_callback_query(call.id)
+    
+    mode_title = "🎬 Animatsiyali" if mode == "animated" else "🔤 Statik"
     bot.edit_message_text(
         chat_id=chat_id,
         message_id=call.message.message_id,
-        text="🔤 <b>1-BOSQICH: Shrift yuklash</b>\n\nIltimos, <code>.ttf</code> yoki <code>.otf</code> formatidagi shrift faylini yuboring.",
+        text=f"{mode_title} <b>emoji yaratish (1-BOSQICH)</b>\n\nIltimos, <code>.ttf</code> yoki <code>.otf</code> formatidagi shrift faylini yuboring.",
         parse_mode="HTML"
     )
 
@@ -143,6 +143,57 @@ def process_color_selection(chat_id, message_id, color):
         parse_mode="HTML"
     )
 
+def create_animated_webm(char, font_path, color, is_digit, output_path):
+    """Kadrba-kadr pulsatsiyalanuvchi WEBM video (animatsiya) yaratish"""
+    frames = []
+    total_frames = 16  # Silliq va tezkor sikl uchun 16 kadr
+    
+    for f_idx in range(total_frames):
+        # Silliq kattalashib-kichiklashuv katsenti (sine wave)
+        scale = 0.82 + 0.18 * math.sin(2 * math.pi * f_idx / total_frames)
+        
+        img = Image.new('RGBA', (100, 100), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        if is_digit:
+            font_size = int(45 * scale)
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except:
+                font = ImageFont.load_default()
+            
+            # Doiraning o'lchami ham harakatlanadi
+            r_margin = int(8 + (1 - scale) * 10)
+            draw.ellipse((r_margin, r_margin, 100 - r_margin, 100 - r_margin), outline=color, width=4)
+            
+            bbox = draw.textbbox((0, 0), char, font=font)
+            x = (100 - (bbox[2] - bbox[0])) / 2
+            y = (100 - (bbox[3] - bbox[1])) / 2 - bbox[1]
+            draw.text((x, y), char, font=font, fill=color)
+        else:
+            font_size = int(65 * scale)
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except:
+                font = ImageFont.load_default()
+                
+            bbox = draw.textbbox((0, 0), char, font=font)
+            x = (100 - (bbox[2] - bbox[0])) / 2
+            y = (100 - (bbox[3] - bbox[1])) / 2 - bbox[1]
+            draw.text((x, y), char, font=font, fill=color)
+
+        frames.append(np.array(img))
+
+    # Transparent WEBM VP9 video ko'rinishida saqlash
+    imageio.mimsave(
+        output_path, 
+        frames, 
+        fps=20, 
+        codec='libvpx-vp9', 
+        pixelformat='yuva420p',
+        output_params=['-auto-alt-ref', '0']
+    )
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("case_"))
 def handle_case_and_generate(call):
     chat_id = call.message.chat.id
@@ -152,19 +203,19 @@ def handle_case_and_generate(call):
     font_path = user_states[chat_id]['font']
     lang = user_states[chat_id]['lang']
     color = user_states[chat_id]['color']
+    mode = user_states[chat_id].get('mode', 'static')
 
-    # Alifbo va sonlarni belgilash
     if lang == 'eng':
         letters = ENG_UPPER if case_type == 'upper' else ENG_LOWER
     else:
         letters = RU_UPPER if case_type == 'upper' else RU_LOWER
 
-    target_chars = letters + DIGITS # Jami: 36 ta (ENG) yoki 43 ta (RU)
+    target_chars = letters + DIGITS
 
     bot.edit_message_text(
         chat_id=chat_id,
         message_id=call.message.message_id,
-        text=f"⚡ <b>Jami {len(target_chars)} ta emoji bir urinishda tayyorlanmoqda...</b>",
+        text=f"⚡ <b>Jami {len(target_chars)} ta {'animatsiyali' if mode == 'animated' else 'statik'} emoji tayyorlanmoqda...</b>\n\n<i>Iltimos, kuting (bu biroz vaqt olishi mumkin)...</i>",
         parse_mode="HTML"
     )
 
@@ -172,52 +223,51 @@ def handle_case_and_generate(call):
     pack_name = f"e_{chat_id}_{ts}_by_{BOT_USERNAME}".lower()
     pack_title = f"Custom Emojis (@{BOT_USERNAME})"
 
-    try:
-        font_letters = ImageFont.truetype(font_path, 65)
-        font_digits = ImageFont.truetype(font_path, 45) # Sonlar doira ichida yaxshi sig'ishi uchun
-    except Exception as e:
-        bot.edit_message_text(f"❌ Shrift faylida xatolik: {e}", chat_id, call.message.message_id)
-        return
-
     temp_files = []
     
-    # 1. Rasmlarni 100x100 formatda chizish
     for i, char in enumerate(target_chars):
-        img_path = f"temp_{chat_id}_{i}.webp"
-        try:
-            img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
-            draw = ImageDraw.Draw(img)
+        if mode == 'animated':
+            ext = "webm"
+            img_path = f"temp_{chat_id}_{i}.webm"
+            try:
+                create_animated_webm(char, font_path, color, char.isdigit(), img_path)
+                temp_files.append(img_path)
+            except Exception as ex:
+                continue
+        else:
+            ext = "webp"
+            img_path = f"temp_{chat_id}_{i}.webp"
+            try:
+                font_letters = ImageFont.truetype(font_path, 65)
+                font_digits = ImageFont.truetype(font_path, 45)
+                
+                img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
+                draw = ImageDraw.Draw(img)
 
-            if char.isdigit():
-                # Sonlar uchun chiroyli doira va karkas chizish
-                draw.ellipse((8, 8, 92, 92), outline=color, width=4)
-                bbox = draw.textbbox((0, 0), char, font=font_digits)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
-                x = (100 - text_width) / 2
-                y = (100 - text_height) / 2 - bbox[1]
-                draw.text((x, y), char, font=font_digits, fill=color)
-            else:
-                # Odatiy harflar uchun
-                bbox = draw.textbbox((0, 0), char, font=font_letters)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
-                x = (100 - text_width) / 2
-                y = (100 - text_height) / 2 - bbox[1]
-                draw.text((x, y), char, font=font_letters, fill=color)
+                if char.isdigit():
+                    draw.ellipse((8, 8, 92, 92), outline=color, width=4)
+                    bbox = draw.textbbox((0, 0), char, font=font_digits)
+                    x = (100 - (bbox[2] - bbox[0])) / 2
+                    y = (100 - (bbox[3] - bbox[1])) / 2 - bbox[1]
+                    draw.text((x, y), char, font=font_digits, fill=color)
+                else:
+                    bbox = draw.textbbox((0, 0), char, font=font_letters)
+                    x = (100 - (bbox[2] - bbox[0])) / 2
+                    y = (100 - (bbox[3] - bbox[1])) / 2 - bbox[1]
+                    draw.text((x, y), char, font=font_letters, fill=color)
 
-            img.save(img_path, "WEBP")
-            temp_files.append(img_path)
-        except Exception:
-            continue
+                img.save(img_path, "WEBP")
+                temp_files.append(img_path)
+            except Exception:
+                continue
 
     if not temp_files:
-        bot.edit_message_text("❌ Rasmlarni yaratib bo'lmadi.", chat_id, call.message.message_id)
+        bot.edit_message_text("❌ Emojilarni yaratishda xatolik yuz berdi.", chat_id, call.message.message_id)
         if os.path.exists(font_path):
             os.remove(font_path)
         return
 
-    # 2. BIR URINISHDA Telegram serveriga yuklash (chunki 50 tadan kam!)
+    # Telegram'ga stiker to'plami sifatida joylash
     opened_files = []
     stickers = []
     for path in temp_files:
@@ -225,13 +275,15 @@ def handle_case_and_generate(call):
         opened_files.append(f)
         stickers.append(InputSticker(f, ["✨"]))
 
+    sticker_format_type = "video" if mode == "animated" else "static"
+
     try:
         bot.create_new_sticker_set(
             user_id=call.from_user.id,
             name=pack_name,
             title=pack_title,
             stickers=stickers,
-            sticker_format="static",
+            sticker_format=sticker_format_type,
             sticker_type="custom_emoji"
         )
         
@@ -243,8 +295,8 @@ def handle_case_and_generate(call):
         markup.add(InlineKeyboardButton(f"✨ {len(temp_files)} ta emojini qo'shib olish", url=pack_url))
 
         bot.edit_message_text(
-            f"🎉 <b>Tabriklaymiz! Emoji to'plami tayyor!</b>\n\n"
-            f"✅ Bir urinishda roppa-rosa <b>{len(temp_files)}</b> ta emoji (Harflar va doira ichidagi Sonlar) yaratildi!\n\n"
+            f"🎉 <b>Tabriklaymiz! {'Animatsiyali' if mode == 'animated' else 'Statik'} emoji to'plami tayyor!</b>\n\n"
+            f"✅ Roppa-rosa <b>{len(temp_files)}</b> ta emoji to'liq yaratildi!\n\n"
             f"🔗 <b>To'plam havolasi:</b>\n{pack_url}\n\n"
             f"👇 <i>Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:</i>",
             chat_id, 
@@ -258,7 +310,6 @@ def handle_case_and_generate(call):
         for f in opened_files:
             f.close()
 
-    # Fayllarni tozalash
     for path in temp_files:
         if os.path.exists(path):
             os.remove(path)
