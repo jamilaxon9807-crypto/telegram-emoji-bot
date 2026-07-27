@@ -23,13 +23,20 @@ def get_supported_chars(font_path):
         for table in ttf['cmap'].tables:
             for char_code in table.cmap.keys():
                 char = chr(char_code)
-                # Shrift qo'llab-quvvatlaydigan barcha chop etiladigan belgilar (harflar, sonlar, tinish va maxsus belgilar)
                 if char.isprintable() and not char.isspace():
                     chars.add(char)
         
-        supported = sorted(list(chars))
+        # Siz istagan tartib bo'yicha guruhlarga ajratib saralaymiz:
+        uppercase = sorted([c for c in chars if c.isupper()])     # 1. Katta harflar
+        lowercase = sorted([c for c in chars if c.islower()])     # 2. Kichik harflar
+        digits = sorted([c for c in chars if c.isdigit()])        # 3. Sonlar
+        others = sorted([c for c in chars if not c.isupper() and not c.islower() and not c.isdigit()]) # 4. Boshqa belgilar
+        
+        # Tartib bo'yicha birlashtiramiz
+        ordered_chars = uppercase + lowercase + digits + others
+        
         # Telegram bitta emoji to'plamiga eng ko'pi bilan 150 ta belgi qabul qiladi
-        return supported[:150] if supported else list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
+        return ordered_chars[:150] if ordered_chars else list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
     except Exception:
         return list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
 
@@ -98,7 +105,7 @@ def handle_color(message):
     user_states[chat_id]['color'] = color
     font_path = user_states[chat_id]['font']
 
-    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⚙️ Shrift ichidagi barcha harflar va belgilar aniqlanmoqda...", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⚙️ Belgilar tartibga solinib, tayyorlanmoqda...", parse_mode="Markdown")
 
     ts = int(time.time())
     pack_name = f"e_{chat_id}_{ts}_by_{BOT_USERNAME}".lower()
@@ -112,7 +119,7 @@ def handle_color(message):
         bot.edit_message_text(f"❌ Shrift faylida xatolik: {e}", chat_id, status_msg.message_id)
         return
 
-    # 1-BOSQICH: Barcha belgilarni 100x100 WEBP formatida tayyorlash
+    # 1-BOSQICH: Belgilarni 100x100 WEBP formatida yaratish
     temp_files = []
     for i, char in enumerate(characters):
         img_path = f"temp_{chat_id}_{i}.webp"
@@ -138,7 +145,7 @@ def handle_color(message):
             os.remove(font_path)
         return
 
-    # 2-BOSQICH: Telegramga yuklash (Birinchi 50 tasi birvarakayiga, qolganlari ketma-ket)
+    # 2-BOSQICH: Telegramga yuklash (Birinchi 50 tasi birvarakayiga, qolganlari tartib bilan)
     batch1 = temp_files[:50]
     remaining_batch = temp_files[50:]
 
@@ -154,8 +161,7 @@ def handle_color(message):
 
     try:
         bot.edit_message_text(
-            f"⚡ Shrift bo'yicha jami **{len(temp_files)}** ta belgi topildi!\n"
-            f"🚀 Emojilar to'plami yaratilmoqda...",
+            f"⚡ Jami **{len(temp_files)}** ta belgi (Katta harflar -> Kichik harflar -> Sonlar -> Belgilar) tartibida yuklanmoqda...",
             chat_id,
             status_msg.message_id,
             parse_mode="Markdown"
@@ -202,7 +208,7 @@ def handle_color(message):
                 if idx % 15 == 0:
                     try:
                         bot.edit_message_text(
-                            f"⚡ Emojilar qo'shilmoqda: **{success_count}/{len(temp_files)}** ta tayyor...",
+                            f"⚡ Qo'shilmoqda: **{success_count}/{len(temp_files)}** ta tayyor...",
                             chat_id,
                             status_msg.message_id,
                             parse_mode="Markdown"
@@ -225,11 +231,11 @@ def handle_color(message):
         pack_url = f"https://t.me/addemoji/{pack_name}"
         
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("✨ Barcha emojilarni qo'shib olish", url=pack_url))
+        markup.add(InlineKeyboardButton("✨ Emojilar to'plamini qo'shib olish", url=pack_url))
 
         bot.edit_message_text(
             f"🎉 **Tabriklaymiz! Emoji to'plami tayyor!**\n\n"
-            f"✅ Shrift ichidagi barcha harflar, raqamlar va belgilar asosida jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
+            f"✅ Barcha harflar va belgilar aniq tartibda (**Katta harflar -> Kichik harflar -> Sonlar -> Boshqa belgilar**) yig'ilib, jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
             f"🔗 **To'plam havolasi:**\n{pack_url}\n\n"
             f"👇 *Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:*",
             chat_id, 
