@@ -1,4 +1,9 @@
 pyTelegramBotAPI
 Pillow
 fonttools
+pyTelegramBotAPI
+Pillow
+imageio
+imageio-ffmpeg
+numpy
 
