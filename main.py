@@ -26,17 +26,17 @@ def get_supported_chars(font_path):
                 if char.isprintable() and not char.isspace():
                     chars.add(char)
         
-        # Siz istagan tartib bo'yicha guruhlarga ajratib saralaymiz:
-        uppercase = sorted([c for c in chars if c.isupper()])     # 1. Katta harflar
-        lowercase = sorted([c for c in chars if c.islower()])     # 2. Kichik harflar
-        digits = sorted([c for c in chars if c.isdigit()])        # 3. Sonlar
-        others = sorted([c for c in chars if not c.isupper() and not c.islower() and not c.isdigit()]) # 4. Boshqa belgilar
+        # Siz talab qilgan aniq tartibdagi guruhlar:
+        uppercase = sorted([c for c in chars if c.isupper()])     # 1. Katta harflar (A-Z va h.k.)
+        lowercase = sorted([c for c in chars if c.islower()])     # 2. Kichik harflar (a-z va h.k.)
+        digits = sorted([c for c in chars if c.isdigit()])        # 3. Sonlar (0-9)
+        others = sorted([c for c in chars if not c.isupper() and not c.islower() and not c.isdigit()]) # 4. Boshqa elementlar
         
         # Tartib bo'yicha birlashtiramiz
         ordered_chars = uppercase + lowercase + digits + others
         
-        # Telegram bitta emoji to'plamiga eng ko'pi bilan 150 ta belgi qabul qiladi
-        return ordered_chars[:150] if ordered_chars else list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
+        # Kamida 150+ ta, ko'pi bilan 200 ta belgi olamiz (Telegram limitiga moslab)
+        return ordered_chars[:200] if ordered_chars else list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
     except Exception:
         return list("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()")
 
@@ -105,7 +105,7 @@ def handle_color(message):
     user_states[chat_id]['color'] = color
     font_path = user_states[chat_id]['font']
 
-    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⚙️ Belgilar tartibga solinib, tayyorlanmoqda...", parse_mode="Markdown")
+    status_msg = bot.reply_to(message, f"🎨 Rang (`{color}`) qabul qilindi!\n\n⚙️ Katta harflar, kichik harflar va sonlar tartib bilan tayyorlanmoqda...", parse_mode="Markdown")
 
     ts = int(time.time())
     pack_name = f"e_{chat_id}_{ts}_by_{BOT_USERNAME}".lower()
@@ -119,7 +119,7 @@ def handle_color(message):
         bot.edit_message_text(f"❌ Shrift faylida xatolik: {e}", chat_id, status_msg.message_id)
         return
 
-    # 1-BOSQICH: Belgilarni 100x100 WEBP formatida yaratish
+    # 1-BOSQICH: Barcha belgilarni 100x100 WEBP formatida yaratish
     temp_files = []
     for i, char in enumerate(characters):
         img_path = f"temp_{chat_id}_{i}.webp"
@@ -161,7 +161,7 @@ def handle_color(message):
 
     try:
         bot.edit_message_text(
-            f"⚡ Jami **{len(temp_files)}** ta belgi (Katta harflar -> Kichik harflar -> Sonlar -> Belgilar) tartibida yuklanmoqda...",
+            f"⚡ Jami **{len(temp_files)}** ta belgi (Katta harflar -> Kichik harflar -> Sonlar -> Boshqa elementlar) tartibida yuklanmoqda...",
             chat_id,
             status_msg.message_id,
             parse_mode="Markdown"
@@ -235,7 +235,7 @@ def handle_color(message):
 
         bot.edit_message_text(
             f"🎉 **Tabriklaymiz! Emoji to'plami tayyor!**\n\n"
-            f"✅ Barcha harflar va belgilar aniq tartibda (**Katta harflar -> Kichik harflar -> Sonlar -> Boshqa belgilar**) yig'ilib, jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
+            f"✅ Barcha harflar va sonlar aniq tartibda (**Katta harflar -> Kichik harflar -> Sonlar -> Boshqa elementlar**) yig'ilib, jami **{success_count}** ta maxsus emoji yaratildi!\n\n"
             f"🔗 **To'plam havolasi:**\n{pack_url}\n\n"
             f"👇 *Pastroqdagi tugmani bosing va to'plamni Telegram'ga qo'shib oling:*",
             chat_id, 
