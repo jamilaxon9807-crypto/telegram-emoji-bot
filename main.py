@@ -7,7 +7,7 @@ from fontTools.ttLib import TTFont
 
 TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
-BOT_USERNAME = "JM_CreatorStudio_bot"  # Siz ko'rsatgan bot nomi
+BOT_USERNAME = "JM_CreatorStudio_bot" 
 
 user_states = {}
 
@@ -103,16 +103,19 @@ def handle_color(message):
 
     for i, char in enumerate(characters):
         try:
-            # Har 5 ta belgida holatni qiziqarli qilib yangilab turamiz
-            if i % 5 == 0:
-                bot.edit_message_text(
-                    f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
-                    f"⚡ Ishlov berilmoqda: **{i}/{total_chars}** ta belgi tayyorlandi...\n"
-                    f"<i>Bot: @{BOT_USERNAME}</i>",
-                    chat_id, 
-                    status_msg.message_id,
-                    parse_mode="HTML"
-                )
+            # Foiz yoki animatsiya qotib qolmasligi uchun uni har 3 harfda bir marta yangilaymiz
+            if i % 3 == 0:
+                try:
+                    bot.edit_message_text(
+                        f"🎨 Rang (`{color}`) qabul qilindi!\n\n"
+                        f"⚡ Ishlov berilmoqda: <b>{success_count}/{total_chars}</b> ta belgi yuklandi...\n"
+                        f"<i>Bot: @{BOT_USERNAME}</i>",
+                        chat_id, 
+                        status_msg.message_id,
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
 
             img = Image.new('RGBA', (100, 100), (255, 255, 255, 0))
             draw = ImageDraw.Draw(img)
@@ -132,37 +135,61 @@ def handle_color(message):
             with open(output_path, 'rb') as f:
                 input_sticker = telebot.types.InputSticker(f, emoji_icon)
                 
-                if first_sticker:
-                    bot.create_new_sticker_set(
-                        user_id=message.from_user.id,
-                        name=pack_name,
-                        title=pack_title,
-                        stickers=[input_sticker],
-                        sticker_format="static",
-                        sticker_type="custom_emoji"
-                    )
-                    first_sticker = False
-                    time.sleep(1.5)
-                else:
-                    bot.add_sticker_to_set(
-                        user_id=message.from_user.id,
-                        name=pack_name,
-                        sticker=input_sticker
-                    )
-                    time.sleep(0.3) # Telegram anti-spam bloki chiqmasligi uchun xavfsiz pauza
+                success = False
+                attempts = 0
+                
+                # Mana shu tsikl orqali xato bersa qaytadan urinib ko'ramiz
+                while not success and attempts < 5:
+                    try:
+                        if first_sticker:
+                            bot.create_new_sticker_set(
+                                user_id=message.from_user.id,
+                                name=pack_name,
+                                title=pack_title,
+                                stickers=[input_sticker],
+                                sticker_format="static",
+                                sticker_type="custom_emoji"
+                            )
+                            first_sticker = False
+                            time.sleep(1.5)
+                        else:
+                            bot.add_sticker_to_set(
+                                user_id=message.from_user.id,
+                                name=pack_name,
+                                sticker=input_sticker
+                            )
+                            time.sleep(0.4)
+                        success = True
+                        success_count += 1
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        
+                        # Agar Telegram spam sifatida ko'rsa
+                        if "429" in error_msg or "too many requests" in error_msg:
+                            try:
+                                bot.edit_message_text(
+                                    f"⚠️ <b>Telegram Anti-spam tizimi sezildi!</b>\n\n"
+                                    f"⏳ Botingiz limitga tushmasligi uchun avtomatik 12 soniya dam olmoqda, shundan so'ng davom etadi...\n"
+                                    f"<i>Hozirgacha saqlandi: {success_count}/{total_chars}</i>",
+                                    chat_id, status_msg.message_id, parse_mode="HTML"
+                                )
+                            except:
+                                pass
+                            time.sleep(12)  # Bu muhim pauza
+                            attempts += 1
+                        else:
+                            break
 
             os.remove(output_path)
-            success_count += 1
 
         except Exception as e:
-            print(f"Xatolik: {e}")
             continue
 
     if success_count > 0:
         pack_url = f"https://t.me/addstickers/{pack_name}"
         bot.edit_message_text(
             f"🎉 <b>Tabriklaymiz!</b>\n\n"
-            f"✨ <b>{success_count}</b> ta belgidan iborat 100x100 o'lchamdagi emoji to'plami tayyor!\n\n"
+            f"✨ <b>{success_count}</b> ta belgidan iborat to'liq emoji to'plami tayyor!\n\n"
             f"👉 To'plamni qo'shib olish uchun quyidagi ssilkaga bosing:\n{pack_url}\n\n"
             f"<i>Yaratuvchi: @{BOT_USERNAME}</i>",
             chat_id, 
