@@ -1,5 +1,34 @@
 import os
 import time
+import math
+import threading
+import numpy as np
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputSticker
+from PIL import Image, ImageDraw, ImageFont
+import imageio
+from flask import Flask
+
+# --- RENDER UCHLAB QOLMASLIGI UCHUN VEB SERVER ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running 24/7 successfully!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
+
+# --------------------------------------------------
+
+TOKEN = os.environ.get("BOT_TOKEN")
+bot = telebot.TeleBot(TOKEN)
+
+# ... (qolgan bot kodlari o'zgarmasdan davom etaveradi) ...
+
+import os
+import time
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputSticker
 from PIL import Image, ImageDraw, ImageFont
@@ -268,4 +297,11 @@ def handle_case_and_generate(call):
     user_states.pop(chat_id, None)
 
 bot.polling(none_stop=True)
+if __name__ == '__main__':
+    # Veb-serverni alohida oqimda (thread) ishga tushiramiz
+    server_thread = threading.Thread(target=run_flask)
+    server_thread.start()
+    
+    # Botni uzluksiz ishga tushiramiz
+    bot.infinity_polling(none_stop=True)
 
